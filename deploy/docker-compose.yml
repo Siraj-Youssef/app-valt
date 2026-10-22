@@ -1,0 +1,24 @@
+# Produção: servidor de sync atrás do Caddy (HTTPS/WSS automático via Let's Encrypt).
+# Uso: defina DOMINIO no .env (ex.: DOMINIO=rumo.seudominio.com) e rode `docker compose up -d --build`.
+services:
+  sync:
+    build: ../server
+    restart: unless-stopped
+    volumes:
+      - sync-data:/data
+
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMINIO: ${DOMINIO:?defina DOMINIO no .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+
+volumes:
+  sync-data:
+  caddy-data:

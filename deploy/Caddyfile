@@ -1,0 +1,5 @@
+{$DOMINIO} {
+	encode zstd gzip
+	# HTTP (contas) e WebSocket (/sync) vão para o mesmo processo; o Caddy faz o upgrade do WS sozinho.
+	reverse_proxy sync:8787
+}
