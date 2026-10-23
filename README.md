@@ -50,11 +50,9 @@ Nasceu da análise de um app pessoal mostrado num vídeo do Instagram (`@adrian_
 
 ## 3. Instalar no celular (Android)
 
-1. No GitHub, abra **Actions → Gerar APK** e clique na execução mais recente com o ✓ verde.
-2. No fim da página, em **Artifacts**, baixe **Rumo-android** (vem um `.zip` com o `Rumo.apk` dentro).
-3. Abra o `Rumo.apk` no celular e permita **instalar apps desconhecidos** para o navegador ou o gerenciador de arquivos.
+No celular, abra **https://github.com/Siraj-Youssef/app-valt/raw/apk/Rumo.apk**: o download começa direto. Depois abra o `Rumo.apk` e permita **instalar apps desconhecidos** para o navegador ou o gerenciador de arquivos.
 
-Para uma versão fixa e fácil de achar, crie uma tag `v1.0.0` (em **Releases → Draft a new release**): o mesmo workflow anexa o `Rumo.apk` à Release.
+Esse link sempre aponta para o APK mais recente. O mesmo arquivo fica em **Actions → Gerar APK → execução mais recente → Artifacts**, e uma tag `v1.0.0` (em **Releases → Draft a new release**) anexa o APK a uma Release.
 
 **Atualizar:** instale o APK novo por cima. Os dados continuam lá, porque todo build é assinado com a mesma chave.
 

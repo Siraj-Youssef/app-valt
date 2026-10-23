@@ -1,6 +1,7 @@
 # Gera o APK do Rumo (Android) de graça nos servidores do GitHub.
-# Roda sozinho a cada push que mexe no app; o .apk fica em "Artifacts", no fim da página da execução
-# (Actions → Gerar APK → a execução mais recente). Uma tag vX.Y.Z também publica o .apk numa Release.
+# Roda sozinho a cada push que mexe no app. O .apk mais recente fica no branch "apk"
+# (https://github.com/Siraj-Youssef/app-valt/raw/apk/Rumo.apk) e também em "Artifacts" da execução.
+# Uma tag vX.Y.Z também publica o .apk numa Release.
 name: Gerar APK
 
 on:
@@ -44,6 +45,20 @@ jobs:
           name: Rumo-android
           if-no-files-found: error
           path: Rumo.apk
+      # Guarda o APK mais recente sozinho no branch "apk" (um commit só, sobrescrito a cada build):
+      # link fixo para baixar no celular: https://github.com/<dono>/<repo>/raw/apk/Rumo.apk
+      - name: Atualizar o branch apk
+        if: github.ref_type == 'branch'
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          mkdir pub && cp Rumo.apk pub/ && cd pub
+          git init -q -b apk
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Rumo.apk
+          git commit -qm "Rumo.apk de ${GITHUB_SHA::7}"
+          git push -qf "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" apk
       - name: Publicar Release
         if: startsWith(github.ref, 'refs/tags/v')
         env:
