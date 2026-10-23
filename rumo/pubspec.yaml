@@ -1,0 +1,40 @@
+name: rumo
+description: "Rumo: hábitos com pontos e sincronização em tempo real."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.13.5
+
+dependencies:
+  flutter:
+    sdk: flutter
+  shared_preferences: ^2.5.6
+  http: ^1.6.0
+  web_socket_channel: ^3.0.3
+  uuid: ^4.6.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  fonts:
+    # Space Grotesk e Inter: SIL Open Font License 1.1 (ver assets/fonts/OFL.md)
+    - family: SpaceGrotesk
+      fonts:
+        - asset: assets/fonts/SpaceGrotesk_600SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/SpaceGrotesk_700Bold.ttf
+          weight: 700
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter_400Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Inter_500Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter_600SemiBold.ttf
+          weight: 600

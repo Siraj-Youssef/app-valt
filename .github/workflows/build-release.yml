@@ -1,0 +1,130 @@
+# Compila o Rumo (Flutter) para Android (APK) e Windows (instalador .exe + versão portátil .zip).
+# - Em todo push/PR: testa (app e servidor) e gera os arquivos como "artifacts" da execução.
+# - Ao enviar uma tag vX.Y.Z: publica os arquivos numa Release do GitHub, com link de download.
+#
+# Endereço do servidor embutido no app: variável do repositório SERVER_URL
+# (Settings → Secrets and variables → Actions → Variables). Sem ela, o APK usa o PC na rede local
+# (http://192.168.1.65:8787) e o Windows usa http://localhost:8787. O usuário pode trocar na tela de login.
+name: Build e release
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  FLUTTER_VERSION: '3.47.7'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: App — análise e testes
+        working-directory: rumo
+        run: |
+          flutter pub get
+          flutter analyze
+          flutter test
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Servidor — testes de sincronização
+        working-directory: server
+        run: |
+          npm ci
+          npm test
+
+  android:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Compilar APK
+        working-directory: rumo
+        env:
+          SERVER_URL: ${{ vars.SERVER_URL || 'http://192.168.1.65:8787' }}
+        run: |
+          flutter pub get
+          flutter build apk --release --dart-define=SERVER_URL="$SERVER_URL"
+          mkdir -p ../dist
+          cp build/app/outputs/flutter-apk/app-release.apk ../dist/Rumo-android.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Rumo-android
+          path: dist/Rumo-android.apk
+
+  windows:
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Compilar app Windows
+        working-directory: rumo
+        shell: pwsh
+        env:
+          SERVER_URL: ${{ vars.SERVER_URL }}
+        run: |
+          flutter pub get
+          if ($env:SERVER_URL) { flutter build windows --release --dart-define=SERVER_URL="$env:SERVER_URL" } else { flutter build windows --release }
+      - name: Empacotar (portátil .zip + instalador .exe)
+        shell: pwsh
+        run: |
+          $version = if ("${{ github.ref_type }}" -eq "tag") { "${{ github.ref_name }}".TrimStart("v") } else { "0.0.0-dev" }
+          $release = "rumo/build/windows/x64/runner/Release"
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Compress-Archive -Path "$release/*" -DestinationPath "dist/Rumo-windows-portatil.zip"
+          if (-not (Get-Command iscc -ErrorAction SilentlyContinue)) {
+            choco install innosetup -y --no-progress
+            $env:Path += ";C:\Program Files (x86)\Inno Setup 6"
+          }
+          iscc /DAppVersion=$version /DSourceDir="$PWD/$release" /DOutputDir="$PWD/dist" rumo/windows/installer/rumo.iss
+          Get-ChildItem dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Rumo-windows
+          path: dist/*
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [android, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: Rumo ${{ github.ref_name }}
+          files: dist/*
+          body: |
+            ## Downloads
+            - **Android:** `Rumo-android.apk`. Abra no celular e permita "instalar apps desconhecidos".
+            - **Windows:** `Rumo-Setup-*.exe` (instalador) ou `Rumo-windows-portatil.zip` (descompacte e abra `Rumo.exe`).
+
+            O app sincroniza em tempo real com o servidor (`server/`). Veja o README para subir o servidor.
