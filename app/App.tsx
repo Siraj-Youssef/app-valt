@@ -9,8 +9,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { T } from './src/components/ui';
-import { clearSession, loadSession, logoutRemote, saveSession, type Session } from './src/data/session';
-import { closeDb, loadDb, put, useDb } from './src/data/store';
+import { clearSession, loadSession, logoutRemote, saveSession, supabaseFor, type Session } from './src/data/session';
+import { closeDb, getState, loadDb, put, useDb } from './src/data/store';
 import { SyncClient } from './src/data/sync';
 import type { Goal, ProfileSettings, Task } from './src/data/types';
 import { todayKey } from './src/lib/dates';
@@ -45,7 +45,13 @@ export default function App() {
   async function start(s: Session) {
     await loadDb(s.user.id);
     client.current?.stop();
-    client.current = new SyncClient(s.serverUrl, s.token, () => endSession('Sua sessão expirou. Entre de novo.'));
+    client.current = new SyncClient(
+      supabaseFor(s.backend),
+      s.user.id,
+      () => endSession('Sua sessão expirou. Entre de novo.'),
+      // Só cria o perfil se o banco ainda não tiver um (num aparelho novo, ele já vem com a data de início).
+      () => { if (!getState().cols.settings.profile) put<ProfileSettings>('settings', 'profile', { name: s.user.name, startDate: todayKey() }); },
+    );
     setSession(s);
   }
 
@@ -69,15 +75,13 @@ export default function App() {
       {booting || !fontsLoaded ? (
         <View style={{ flex: 1, backgroundColor: colors.bg, justifyContent: 'center' }}><ActivityIndicator color={colors.primary} /></View>
       ) : session ? (
-        <Main session={session} onLogout={() => { logoutRemote(session); endSession(null); }} />
+        <Main session={session} onLogout={() => { endSession(null); logoutRemote(session); }} />
       ) : (
         <LoginScreen
           notice={notice}
-          onDone={async (s, isNew) => {
+          onDone={async (s) => {
             await saveSession(s);
             await start(s);
-            // Só uma conta nova cria o perfil; num login, ele vem do servidor (não sobrescreve a data de início).
-            if (isNew) put<ProfileSettings>('settings', 'profile', { name: s.user.name, startDate: todayKey() });
           }}
         />
       )}
@@ -93,7 +97,7 @@ function Main({ session, onLogout }: { session: Session; onLogout: () => void })
 
   const api = useMemo<ShellApi>(() => ({
     user: session.user,
-    serverUrl: session.serverUrl,
+    serverUrl: session.backend.url,
     openTask: ({ mode, date, editing }: { mode: 'weekly' | 'once'; date?: string; editing?: (Task & { id: string }) | null }) =>
       setTaskSheet({ visible: true, mode, date, editing }),
     openGoal: (editing) => setGoalSheet({ visible: true, editing: editing ?? null }),

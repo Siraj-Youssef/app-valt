@@ -1,19 +1,28 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, Label, T, Toggle, s } from '../components/ui';
-import { authenticate, defaultServerUrl, type Session } from '../data/session';
+import { authenticate, loadBackend, type Session } from '../data/session';
 import { colors } from '../theme';
 
-export function LoginScreen({ onDone, notice }: { onDone: (session: Session, isNew: boolean) => void; notice?: string | null }) {
+export function LoginScreen({ onDone, notice }: { onDone: (session: Session) => void; notice?: string | null }) {
   const insets = useSafeAreaInsets();
   const [mode, setMode] = useState<'login' | 'register'>('register');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [server, setServer] = useState(defaultServerUrl());
+  const [url, setUrl] = useState('');
+  const [key, setKey] = useState('');
   const [showServer, setShowServer] = useState(false);
+
+  useEffect(() => {
+    loadBackend().then((b) => {
+      setUrl(b.url);
+      setKey(b.key);
+      if (!b.url || !b.key) setShowServer(true); // build sem banco embutido: pede na primeira vez
+    });
+  }, []);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(notice ?? null);
 
@@ -21,8 +30,8 @@ export function LoginScreen({ onDone, notice }: { onDone: (session: Session, isN
     setBusy(true);
     setError(null);
     try {
-      const session = await authenticate(mode, server, { email, password, name: mode === 'register' ? name : undefined });
-      onDone(session, mode === 'register');
+      const session = await authenticate(mode, { url, key }, { email, password, name: mode === 'register' ? name : undefined });
+      onDone(session);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -55,10 +64,14 @@ export function LoginScreen({ onDone, notice }: { onDone: (session: Session, isN
 
         <Pressable onPress={() => setShowServer((v) => !v)} style={[s.row, { marginTop: 18 }]}>
           <Ionicons name="server-outline" size={14} color={colors.inkFaint} />
-          <T size={13} faint style={{ marginLeft: 6 }}>Servidor: {server}</T>
+          <T size={13} faint style={{ marginLeft: 6 }}>Banco: {url.replace(/^https?:\/\//, '') || 'não configurado'}</T>
         </Pressable>
         {showServer && (
-          <TextInput value={server} onChangeText={setServer} placeholder="http://192.168.0.10:8787" placeholderTextColor={colors.inkFaint} style={[s.input, { marginTop: 8 }]} autoCapitalize="none" autoCorrect={false} />
+          <>
+            <TextInput value={url} onChangeText={setUrl} placeholder="https://seuprojeto.supabase.co" placeholderTextColor={colors.inkFaint} style={[s.input, { marginTop: 8 }]} autoCapitalize="none" autoCorrect={false} keyboardType="url" />
+            <TextInput value={key} onChangeText={setKey} placeholder="Chave pública (anon / publishable)" placeholderTextColor={colors.inkFaint} style={[s.input, { marginTop: 8 }]} autoCapitalize="none" autoCorrect={false} />
+            <T size={12} faint style={{ marginTop: 6 }}>No Supabase: Project Settings → API. Use a mesma URL e chave no computador e no celular.</T>
+          </>
         )}
 
         {error && <T size={13} style={{ color: colors.danger, marginTop: 14 }}>{error}</T>}

@@ -1,6 +1,6 @@
 # Rumo: um passo de cada vez
 
-App mobile (Android e iOS) para planejar hábitos, somar pontos, bater metas diárias e acompanhar a "rota" do mês, com **sincronização em tempo real** entre aparelhos e funcionamento offline.
+App para **computador (Windows, macOS, Linux) e celular (Android; iPhone pelo navegador)** para planejar hábitos, somar pontos, bater metas diárias e acompanhar a "rota" do mês, com **sincronização em tempo real** entre os aparelhos e funcionamento offline. Tudo em planos **gratuitos**: banco no Supabase e executáveis gerados pelo GitHub.
 
 Nasceu da análise de um app pessoal mostrado num vídeo do Instagram (`@adrian_valt`, 22/10/2026). Do vídeo veio só a **ideia geral**, que é comum a vários apps de hábitos (tarefas que valem pontos, metas por dia, sequência e calendário). Nome, marca, cores, tipografia, textos, layout, navegação e fluxos foram criados do zero.
 
@@ -39,7 +39,7 @@ Nasceu da análise de um app pessoal mostrado num vídeo do Instagram (`@adrian_
 - **Mapa:** mapa de calor do mês com marcos, resumo (pontos, marcos, passos), detalhe do dia, últimas 8 semanas com linha de meta, ranking de constância em 30 dias.
 - **Metas:** destinos da semana, do mês e do ano com unidade livre (livros, km, R$…), +1 rápido e registro de valores maiores.
 - **Você:** etapa e quanto falta, **Rota do mês** com previsão, pontos por dia da semana (a meta da semana e do mês é a soma), nome editável, sair.
-- **Sincronização:** indicador no topo ("em dia", "sincronizando", "N pendentes", "offline").
+- **Sincronização:** indicador no topo ("em dia", "sincronizando", "N pendentes", "offline"). O que é marcado no computador aparece no celular em menos de um segundo, e vice-versa.
 
 **Regras** (`app/src/lib/model.ts`):
 - **Marco:** dia em que os pontos alcançam a meta do dia.
@@ -49,130 +49,147 @@ Nasceu da análise de um app pessoal mostrado num vídeo do Instagram (`@adrian_
 
 ---
 
-## 3. Stack e por quê
+## 3. Como fica de graça
 
-| Camada | Escolha | Justificativa |
+| Peça | Serviço gratuito | O que faz |
 |---|---|---|
-| App | **Expo SDK 58 + React Native 0.88 + TypeScript** | Um código para Android e iOS; roda em aparelho real pelo **Expo Go**; gera **APK** e **TestFlight** pelo EAS sem Mac nem Android SDK local |
-| UI | React Navigation 7 (abas com barra própria), `@expo-google-fonts` (Space Grotesk, Inter), `@expo/vector-icons` | Libs oficiais e mantidas; instaladas com `expo install` (versões compatíveis com o SDK) |
-| Dados locais | AsyncStorage (snapshot JSON por usuário) | Volume pequeno; funciona em Android, iOS e web |
-| Tempo real | **WebSocket próprio** (`ws` 8.22) | Sem depender de serviço proprietário; protocolo de recuperação e conflitos sob nosso controle |
-| Servidor | Node 24 + `node:sqlite` nativo + `ws` | Uma dependência; um arquivo `.db`; Docker |
-| HTTPS/WSS | Caddy (Let's Encrypt automático) | Mesmo padrão do n8n-copilot-stack |
+| Banco + contas + tempo real | **Supabase** (plano Free) | Guarda os dados de cada conta (Postgres), faz login por e-mail e senha e avisa os aparelhos na hora quando algo muda |
+| Executáveis | **GitHub Actions** (grátis e ilimitado em repositório público) | Gera o instalador `.exe` do Windows, o `.dmg` do macOS, o `.AppImage` do Linux e o `.apk` do Android, e publica tudo numa Release |
+| iPhone | **GitHub Pages** | Versão web instalável: Safari → Compartilhar → "Adicionar à Tela de Início". (App nativo de iPhone exige a conta Apple de US$ 99/ano) |
+
+Nada disso pede cartão de crédito.
 
 ---
 
-## 4. Arquitetura
+## 4. Passo a passo (uma vez só, uns 15 minutos)
+
+### 4.1 Criar o banco no Supabase
+1. Crie uma conta em **supabase.com** e clique em **New project** (região: *South America (São Paulo)*). Guarde a senha do banco, mas o app não precisa dela.
+2. No projeto, abra **SQL Editor → New query**, cole todo o conteúdo de [`supabase/schema.sql`](supabase/schema.sql) e clique **Run**. Deve aparecer "Success".
+3. **Authentication → Sign In / Providers → Email:** desligue **Confirm email** (assim a conta funciona na hora, sem link por e-mail). Se preferir deixar ligado, o app avisa para confirmar pelo e-mail antes de entrar.
+4. **Project Settings → API Keys** (ou **Data API**): copie a **Project URL** (`https://xxxx.supabase.co`) e a chave **publishable** (ou **anon public**). Essa chave é feita para ficar dentro do app; quem protege os dados são as regras do banco (cada conta só lê e grava o que é seu). **Nunca** use a chave `service_role`/`secret`.
+
+### 4.2 Contar ao GitHub qual é o banco
+No repositório: **Settings → Secrets and variables → Actions → aba Variables → New repository variable**:
+
+| Nome | Valor |
+|---|---|
+| `SUPABASE_URL` | a Project URL |
+| `SUPABASE_KEY` | a chave publishable/anon |
+
+Assim os executáveis já saem apontando para o seu banco. (Sem isso eles funcionam também, mas pedem a URL e a chave na tela de entrada, no botão **Banco**.)
+
+### 4.3 Gerar os executáveis
+- **Publicar uma versão:** em **Code → Releases → Draft a new release**, crie a tag `v1.0.0` (ou rode `git tag v1.0.0 && git push origin v1.0.0`). O workflow **Gerar executáveis** roda sozinho (uns 15–20 min) e cria a Release com os arquivos. Se a Release foi criada pela tela, os arquivos são anexados a ela.
+- **Só testar:** **Actions → Gerar executáveis → Run workflow**. Os arquivos ficam em **Artifacts**, no fim da página da execução.
+
+| Arquivo | Para |
+|---|---|
+| `Rumo-x.y.z-instalador-windows.exe` | Windows, instala com atalho no menu Iniciar |
+| `Rumo-x.y.z-portatil-windows.exe` | Windows, roda sem instalar (bom para pendrive) |
+| `Rumo-android.apk` | Android |
+| `Rumo-x.y.z-mac-arm64.dmg` | macOS (Apple Silicon) |
+| `Rumo-x.y.z-linux-x86_64.AppImage` | Linux |
+
+### 4.4 Instalar
+- **Windows:** o executável não tem certificado pago, então o SmartScreen avisa na primeira vez: **Mais informações → Executar assim mesmo**.
+- **Android:** abra o `.apk` no celular (pelo navegador ou mandando para si mesmo) e permita **instalar apps desconhecidos** para o navegador/gerenciador de arquivos. Atualizar é instalar o `.apk` novo por cima; os dados ficam.
+- **iPhone:** ative **Settings → Pages → Source: GitHub Actions** no repositório e rode **Actions → Publicar versão web** (também roda sozinho a cada tag `v*`). Abra `https://<seu-usuario>.github.io/app-valt/` no **Safari → Compartilhar → Adicionar à Tela de Início**. Precisa de internet para abrir; os dados ficam salvos no aparelho.
+- **macOS:** como não é assinado pela Apple, depois de arrastar para Aplicativos rode uma vez no Terminal `xattr -cr /Applications/Rumo.app`.
+
+Entre com **o mesmo e-mail e senha** no computador e no celular: é isso que liga os dois.
+
+### 4.5 Fechar o cadastro (recomendado)
+O repositório é público e a chave do app também; qualquer pessoa com o app poderia criar uma conta no **seu** banco (sem ver os seus dados). Depois de criar a sua conta (e a de quem mais for usar), desligue em **Authentication → Sign In / Providers → Allow new users to sign up**. O app mostra "Novos cadastros estão desligados" para quem tentar.
+
+---
+
+## 5. Arquitetura
 
 ```
- ┌──────────── Celular A ────────────┐        ┌──────────── Celular B ────────────┐
- │ Telas (React)                     │        │ Telas (React)                     │
- │   ▲ useDb() / useSyncStatus()     │        │                                   │
- │ store.ts  banco local + outbox    │        │ store.ts                          │
- │   │  put()/remove() → outbox      │        │   ▲ applyRemote() (LWW)           │
- │ sync.ts  WebSocket ───────────────┼──┐  ┌──┼── sync.ts                         │
- │  backoff, ping/pong, lotes c/ ack │  │  │  │                                   │
- └───────────────────────────────────┘  │  │  └───────────────────────────────────┘
-                                         ▼  │
-                     ┌──────── server (Node) ────────────────┐
-                     │ HTTP  /auth/register /auth/login /me  │
-                     │ WS    /sync  hello → catch-up → live  │
-                     │ db.js applyOps(): LWW + seq por user  │
-                     │ SQLite: users, sessions, records      │
-                     └───────────────────────────────────────┘
+ ┌──── Computador (Electron) ────┐   ┌──── Celular (Android / iPhone web) ────┐
+ │ mesmo código React Native     │   │ Telas (React Native)                   │
+ │ (versão web embutida no .exe) │   │ store.ts  banco local + outbox         │
+ │ store.ts → localStorage       │   │ sync.ts   pull por seq, push em lotes  │
+ └──────────────┬────────────────┘   └───────────────────┬────────────────────┘
+                │ HTTPS (REST) + WebSocket (Realtime)    │
+                ▼                                        ▼
+        ┌────────────────────────── Supabase (grátis) ─────────────────────────┐
+        │ Auth: e-mail e senha                                                 │
+        │ Postgres: tabela records (RLS: cada usuário só vê o que é seu)       │
+        │ push_ops(): "last writer wins" por registro + seq crescente          │
+        │ Realtime: avisa os outros aparelhos quando records muda              │
+        └──────────────────────────────────────────────────────────────────────┘
 ```
 
-**Protocolo** (documentado no topo de `server/src/server.js`):
-1. O app conecta em `/sync` e envia `hello {token, deviceId, since: lastSeq}`.
-2. O servidor manda tudo com `seq > lastSeq`, depois `synced`, e passa a repassar ao vivo as mudanças dos outros aparelhos do mesmo usuário.
-3. Edições locais entram na **outbox** e sobem em lotes (`push`). O servidor responde `ack` com a versão vencedora de cada registro. Só sai da outbox o que foi confirmado e não foi editado de novo nesse meio-tempo.
-4. **Conflito:** *last writer wins* por registro (timestamp, com `deviceId` como desempate), a mesma regra no app e no servidor. Ao editar, o app usa `max(agora, versão atual + 1)`, então uma edição feita depois de ver a de outro aparelho sempre vence, mesmo com o relógio atrasado.
-5. **Celular real:** reconexão com backoff exponencial + jitter (1 s → 30 s), reconexão imediata ao voltar do background, ping a cada 20 s (sem resposta em 10 s, a conexão é refeita), heartbeat do servidor a cada 30 s, timeout de 15 s no ack e gravação local ao ir para o background.
+**Protocolo** (`app/src/data/sync.ts` e `supabase/schema.sql`):
+1. Tudo é gravado primeiro no aparelho (a interface nunca espera a rede). Cada edição entra na **outbox**.
+2. O app lê do banco tudo com `seq > lastSeq` (de 1000 em 1000) e envia a outbox em lotes de 200 pela função `push_ops`. Só sai da outbox o que foi confirmado e não foi editado de novo nesse meio-tempo.
+3. **Conflito:** *last writer wins* por registro (timestamp, com `deviceId` como desempate, comparado byte a byte igual no app e no banco). Ao editar, o app usa `max(agora, versão atual + 1)`, então quem edita depois de ver a versão de outro aparelho sempre vence, mesmo com o relógio atrasado.
+4. **Sem buracos:** `push_ops` serializa os lotes de cada usuário (advisory lock), então quem lê `seq > X` nunca pula uma mudança em andamento. A resposta do envio não avança o `lastSeq`; só a leitura avança.
+5. **Tempo real:** o Supabase Realtime avisa quando uma linha do usuário muda e o app faz a leitura na hora. Por garantia, também lê a cada 60 s e ao voltar para o app.
+6. **Rede ruim:** requisições com limite de 15 s; falhou, tenta de novo com backoff exponencial + jitter (1 s → 30 s); ao voltar do background sincroniza na hora e grava o estado local.
 
 **Coleções sincronizadas:** `tasks`, `completions` (id `tarefa@data`), `settings` (`goals`, `profile`), `goals`, `goalLogs`.
 
 ---
 
-## 5. Código-fonte
+## 6. Código-fonte
 
 ```
-├── app/                          Expo (Android + iOS; web só para testes)
+├── app/                          Expo SDK 58 + React Native (Android, iOS e web)
 │   ├── App.tsx                   fontes, sessão, abas, botão "+" contextual, sheets
-│   ├── app.json / eas.json       config nativa e perfis de build (APK, TestFlight)
-│   ├── assets/                   ícone, ícone adaptativo Android, splash, favicon
+│   ├── app.json / app.config.js  config nativa; app.config.js só ajusta a subpasta da versão web
+│   ├── public/                   index.html e manifest da versão web (instalável)
 │   └── src/
-│       ├── theme.ts              paleta e fontes da marca
-│       ├── data/   store.ts (banco local + outbox) · sync.ts (WebSocket) · session.ts · types.ts
+│       ├── data/   store.ts (banco local + outbox) · sync.ts (Supabase) · session.ts (contas) · types.ts
 │       ├── lib/    model.ts (pontos, marcos, etapa, rota, Bússola) · dates.ts · confirm.ts
-│       ├── components/ ui.tsx (Card, Button, Toggle, ChoicePills, Nudge, Sheet…) · widgets.tsx (TrailBar, WeekDots, DayNav, TaskRow, SyncDot)
-│       ├── sheets/ TaskSheet (Novo passo) · GoalSheets
-│       └── screens/ Today · Map · Goals · You · Login
-├── server/   src/{index,server,db,auth}.js · test/sync.test.js · Dockerfile
-├── deploy/   docker-compose.yml + Caddyfile (HTTPS/WSS)
+│       ├── components/ · sheets/ · screens/
+├── desktop/                      Electron: main.js abre app/dist pelo protocolo rumo://app
+├── supabase/schema.sql           tabela, regras de acesso (RLS), push_ops e Realtime
+├── supabase/test/                testes do schema num Postgres local (run.sh)
+├── .github/workflows/            release.yml (exe/dmg/AppImage/apk) · pages.yml (web) · ci.yml (verificações)
 └── docs/telas/                   screenshots
 ```
 
----
-
-## 6. Rodar e instalar
-
-**Pré-requisitos:**
-- Node 22.13 ou mais novo (testado com 24.21).
-- **Expo Go** no celular, na mesma rede Wi-Fi do PC.
-- Conta gratuita em expo.dev, para gerar APK/TestFlight.
-
-### 6.1 Servidor
-```bash
-cd server
-npm install
-npm test        # 6 testes: tempo real, recuperação offline, conflito, isolamento, auth, validação
-npm start       # porta 8787; mostra os IPs para usar no celular
-```
-No Windows, libere a porta 8787 no firewall (rede privada).
-
-### 6.2 App no celular (Expo Go)
-```bash
-cd app
-npm install
-npx expo start
-```
-Escaneie o QR code. O app sugere o servidor no IP do PC (`http://<ip>:8787`); dá para trocar em "Servidor" no login. Para ver o tempo real, entre com a mesma conta em dois aparelhos.
-
-### 6.3 APK (Android)
-```bash
-npm install -g eas-cli
-cd app
-eas login
-eas init                      # vincula o projeto à sua conta (uma vez)
-EAS_NO_VCS=1 eas build -p android --profile preview
-```
-O servidor padrão do app vem de `EXPO_PUBLIC_SERVER_URL` no perfil `preview` do **`app/eas.json`**. O build roda na nuvem do Expo, que **não** lê variáveis do seu terminal. Hoje ele aponta para o IP do PC no Wi-Fi (`http://192.168.1.65:8787`), que só funciona na mesma rede e com `npm start` rodando no servidor. Para usar fora de casa, troque por `https://rumo.seudominio.com` (seção 6.5) e gere de novo. Em qualquer caso, o usuário pode mudar o servidor na tela de login.
-
-`EAS_NO_VCS=1` envia a pasta sem exigir commit no git (no PowerShell: `$env:EAS_NO_VCS="1"` antes). O EAS devolve um link/QR do `.apk`; instale no Android permitindo "fontes desconhecidas".
-
-### 6.4 iOS (TestFlight)
-```bash
-eas build -p ios --profile production
-eas submit -p ios
-```
-Exige Apple Developer (US$ 99/ano). Antes disso, teste pelo Expo Go.
-
-### 6.5 Servidor em produção
-```bash
-cd deploy
-echo DOMINIO=rumo.seudominio.com > .env
-docker compose up -d --build
-```
+O servidor Node próprio da versão anterior (`server/`, `deploy/`) foi substituído pelo Supabase, que não precisa de computador ligado nem de domínio. Ele continua no histórico do git (commit `1fc33ac`).
 
 ---
 
-## 7. Limitações e pontos a validar
+## 7. Desenvolvimento
 
-- **Nome:** verificar disponibilidade de "Rumo" no INPI e nas lojas (ver nota na seção 1). Os ids `app.rumo.habitos` são provisórios; troque pelo domínio da sua empresa.
-- **Inferido, não visto no vídeo:** estatísticas e metas longas (a narração cita "metas pro ano, pro mês, pra semana"). As regras de etapa e rota foram definidas por nós.
-- **Sem push:** notificações não foram implementadas. Lembretes no horário do passo seriam o próximo passo (`expo-notifications`); push remoto exige FCM/APNs.
-- **Conflito por registro inteiro**, não por campo. Exclusões ficam como tombstones; não há recuperação de senha nem exclusão de conta.
-- **Só tema escuro** (preto e vermelho). Os tokens ficam em `app/src/theme.ts`; um tema claro exigiria só uma segunda paleta e a troca por `useColorScheme`.
-- **HTTP sem TLS** só em rede local (Android `usesCleartextTraffic`, iOS `NSAllowsLocalNetworking`). Em produção, use `https://`.
-- **Verificado:** testes do servidor 6/6; `tsc` sem erros; `expo-doctor` 20/20; bundles Android e iOS (Hermes) via `expo export`; navegação real em Edge headless com dois "aparelhos" separados (marcar uma tarefa em A mudou o plano de B de 2/5 para 3/5 em menos de 1,5 s); na versão anterior também testamos fila offline e reentrega; imagem Docker do servidor sobe e responde `/health`.
-- **Não verificado:** celular físico, build EAS (precisa da sua conta Expo) e HTTPS do Caddy (precisa de domínio).
+Pré-requisito: Node 22 ou mais novo. Crie `app/.env.local` (não vai para o git) com:
+```
+EXPO_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
+EXPO_PUBLIC_SUPABASE_KEY=sb_publishable_...
+```
+
+```bash
+# celular com Expo Go (mesma rede Wi-Fi) ou navegador
+cd app && npm install && npx expo start
+
+# computador (Electron) usando a versão web
+cd desktop && npm install && npm run web && npm start
+
+# executável local do seu sistema (Windows gera .exe, Mac .dmg, Linux .AppImage) em desktop/dist
+cd desktop && npm run dist
+
+# testes do banco (precisa de Postgres instalado: initdb, pg_ctl, psql)
+bash supabase/test/run.sh
+```
+
+**EAS (opcional):** o `app/eas.json` continua valendo para gerar o APK ou o iOS pela nuvem do Expo. Para embutir o banco nesses builds, cadastre as variáveis com `npx eas-cli env:create` (nomes `EXPO_PUBLIC_SUPABASE_URL` e `EXPO_PUBLIC_SUPABASE_KEY`).
+
+---
+
+## 8. Limitações e pontos a validar
+
+- **Supabase Free:** 500 MB de banco (sobra para anos de uso pessoal). Um projeto **sem nenhum acesso por 7 dias** é pausado; os dados ficam guardados e basta clicar **Restore** no painel. Usar o app no dia a dia já conta como acesso.
+- **Assinatura:** `.exe` e `.dmg` sem certificado pago (avisos na primeira abertura). O APK é assinado com a chave de debug do modelo do Expo: instala direto, mas não serve para a Play Store.
+- **iPhone:** só pela versão web (sem notificações e precisa de internet para abrir). App nativo exige Apple Developer (US$ 99/ano) e `eas build -p ios`.
+- **Sem atualização automática:** para atualizar, baixe e instale a versão nova da Release. Os dados não se perdem: ficam no aparelho e no banco.
+- **Nome:** verificar disponibilidade de "Rumo" no INPI e nas lojas (ver nota na seção 1). Os ids `app.rumo.habitos` são provisórios.
+- **Sem push:** lembretes no horário do passo seriam o próximo passo (`expo-notifications`).
+- **Conflito por registro inteiro**, não por campo. Exclusões ficam como tombstones; recuperação de senha e exclusão de conta são feitas pelo painel do Supabase (Authentication → Users).
+- **Verificado aqui:** testes do `schema.sql` (8 cenários: LWW, empate, tombstone, isolamento entre contas, validação, permissões, Realtime) num Postgres 16; `tsc` sem erros; versão web com dois "aparelhos" contra um Supabase simulado sobre o mesmo banco (tempo real em ~0,3 s, fila offline sobrevivendo a recarregar a página e entregue ao voltar a rede); app Electron empacotado (`.AppImage`) abrindo, criando conta, fechando e reabrindo logado com os dados; `expo prebuild` do Android.
+- **Não verificado aqui:** o Supabase de verdade (o ambiente de desenvolvimento não tinha acesso a ele), celular físico e os builds de Windows/macOS/Android, que rodam no GitHub Actions.

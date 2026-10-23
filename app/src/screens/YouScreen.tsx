@@ -106,7 +106,7 @@ export function YouScreen() {
 
       <Section title="Conta">
         <Card>
-          <T size={12} dim>Servidor de sincronização</T>
+          <T size={12} dim>Banco de sincronização</T>
           <T size={13} style={{ marginTop: 2 }}>{serverUrl}</T>
           <Pressable onPress={() => confirm('Sair', 'Sair desta conta neste aparelho? Alterações ainda não enviadas serão perdidas.', 'Sair', logout)} style={[s.row, { marginTop: 14 }]}>
             <Ionicons name="log-out-outline" size={18} color={colors.danger} />

@@ -1,0 +1,28 @@
+# Verificações rápidas a cada push: tipos do app e testes do banco (schema.sql num Postgres local).
+name: Verificar
+
+on:
+  push:
+    branches: ['**']
+    tags-ignore: ['**']
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci
+        working-directory: app
+      - run: npx tsc --noEmit
+        working-directory: app
+      - name: Testes do banco
+        run: |
+          ls /usr/lib/postgresql/*/bin/initdb > /dev/null 2>&1 || (sudo apt-get update -qq && sudo apt-get install -y -qq postgresql > /dev/null)
+          cp -r supabase /tmp/supabase && sudo chown -R postgres /tmp/supabase
+          sudo -u postgres env PATH="$(ls -d /usr/lib/postgresql/*/bin | tail -1):$PATH" bash /tmp/supabase/test/run.sh

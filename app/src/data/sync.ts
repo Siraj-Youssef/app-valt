@@ -1,19 +1,19 @@
-// Cliente de sincronização em tempo real via WebSocket.
-// - Reconecta sozinho com backoff exponencial + jitter (1s → 30s) e ao voltar para o app.
-// - Ping de aplicação a cada 20s: se não vier pong em 10s, a conexão é considerada morta.
-// - Envia a outbox em lotes; só apaga da outbox o que o servidor confirmou (ack).
-// - No (re)conectar pede tudo com seq > lastSeq, então nada se perde enquanto estava offline.
-import { AppState, type AppStateStatus } from 'react-native';
+// Sincronização com o Supabase.
+// - Lê do banco tudo com seq > lastSeq (então nada se perde enquanto estava offline).
+// - Envia a outbox em lotes pela função push_ops; só apaga da outbox o que o banco confirmou.
+// - O Supabase Realtime avisa na hora quando outro aparelho muda algo; o aviso dispara uma nova leitura.
+// - Rede caiu: tenta de novo com backoff exponencial + jitter (1s → 30s); ao voltar para o app, sincroniza já.
+import { isAuthRetryableFetchError, type RealtimeChannel, type SupabaseClient } from '@supabase/supabase-js';
 import { useSyncExternalStore } from 'react';
+import { AppState, type AppStateStatus } from 'react-native';
 import { ackOps, applyRemote, getState, pendingOps, saveNow, subscribe } from './store';
-import type { Op } from './types';
+import type { Change } from './types';
 
 export type SyncStatus = 'offline' | 'connecting' | 'syncing' | 'online';
 
 const BATCH = 200;
-const ACK_TIMEOUT_MS = 15_000;
-const PING_EVERY_MS = 20_000;
-const PONG_TIMEOUT_MS = 10_000;
+const PAGE = 1000;
+const POLL_MS = 60_000; // rede de segurança caso algum aviso do tempo real se perca
 
 let status: SyncStatus = 'offline';
 const statusListeners = new Set<() => void>();
@@ -29,168 +29,146 @@ export const useSyncStatus = () =>
     () => status,
   );
 
+type Row = { col: Change['col']; id: string; data: unknown; updated_at: number; device_id: string; deleted: boolean; seq: number };
+const toChange = (r: Row): Change => ({ col: r.col, id: r.id, data: r.data, updatedAt: r.updated_at, deviceId: r.device_id, deleted: r.deleted, seq: r.seq });
+
 export class SyncClient {
-  private ws: WebSocket | null = null;
   private stopped = false;
-  private attempt = 0;
-  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-  private pingTimer: ReturnType<typeof setInterval> | null = null;
-  private pongTimer: ReturnType<typeof setTimeout> | null = null;
-  private ackTimer: ReturnType<typeof setTimeout> | null = null;
-  private inflight: { batch: string; ops: Op[] } | null = null;
-  private ready = false;
+  private running = false;
+  private again = false;
+  private synced = false;
+  private failures = 0;
+  private timer: ReturnType<typeof setTimeout> | null = null;
+  private poll: ReturnType<typeof setInterval>;
+  private channel: RealtimeChannel;
   private unsubscribeStore: () => void;
   private appStateSub: { remove(): void };
-  private flushQueued = false;
+  private authSub: { unsubscribe(): void };
 
   constructor(
-    private serverUrl: string,
-    private token: string,
+    private sb: SupabaseClient,
+    userId: string,
     private onUnauthorized: () => void,
+    private onFirstSync: () => void,
   ) {
-    this.unsubscribeStore = subscribe(() => this.queueFlush());
+    setStatus('connecting');
+    this.unsubscribeStore = subscribe(() => { if (pendingOps().length) this.queue(30); });
     this.appStateSub = AppState.addEventListener('change', (s) => this.onAppState(s));
-    this.connect();
+    this.authSub = sb.auth.onAuthStateChange((event) => {
+      // Não chamar o Supabase dentro deste callback (recomendação da lib): sai para o próximo tick.
+      if (event === 'SIGNED_OUT') setTimeout(() => this.unauthorized(), 0);
+    }).data.subscription;
+    this.channel = sb
+      .channel(`rumo:${userId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'records', filter: `user_id=eq.${userId}` }, () => this.queue(150))
+      .subscribe((s) => { if (s === 'SUBSCRIBED') this.queue(0); });
+    this.poll = setInterval(() => this.queue(0), POLL_MS);
+    this.queue(0);
   }
 
   stop() {
+    if (this.stopped) return;
     this.stopped = true;
     this.unsubscribeStore();
     this.appStateSub.remove();
-    this.clearTimers();
-    this.ws?.close();
-    this.ws = null;
+    this.authSub.unsubscribe();
+    if (this.timer) clearTimeout(this.timer);
+    clearInterval(this.poll);
+    this.sb.removeChannel(this.channel);
     setStatus('offline');
+  }
+
+  private unauthorized() {
+    if (this.stopped) return;
+    this.stop();
+    this.onUnauthorized();
   }
 
   private onAppState(s: AppStateStatus) {
     if (s === 'active') {
-      // Ao voltar do background a conexão pode estar zumbi: reconecta já, sem esperar o backoff.
-      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) this.reconnectNow();
-      else this.sendPing();
+      this.sb.auth.startAutoRefresh();
+      this.failures = 0;
+      this.queue(0);
     } else {
+      this.sb.auth.stopAutoRefresh();
       saveNow();
     }
   }
 
-  private reconnectNow() {
-    this.attempt = 0;
-    this.clearTimers();
-    const old = this.ws;
-    this.ws = null; // o onclose do socket antigo é ignorado
-    this.ready = false;
-    this.inflight = null;
-    old?.close();
-    this.connect();
+  private queue(delayMs: number) {
+    if (this.stopped) return;
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = setTimeout(() => { this.timer = null; this.run(); }, delayMs);
   }
 
-  private connect() {
-    if (this.stopped || (this.ws && this.ws.readyState <= WebSocket.OPEN)) return;
-    setStatus('connecting');
-    const url = this.serverUrl.replace(/^http/, 'ws').replace(/\/$/, '') + '/sync';
-    const ws = new WebSocket(url);
-    this.ws = ws;
-
-    ws.onopen = () => {
-      const { deviceId, lastSeq } = getState();
-      this.send({ t: 'hello', token: this.token, deviceId, since: lastSeq });
-      this.pingTimer = setInterval(() => this.sendPing(), PING_EVERY_MS);
-    };
-
-    ws.onmessage = (ev) => {
-      let msg: any;
-      try { msg = JSON.parse(String(ev.data)); } catch { return; }
-      if (this.pongTimer) { clearTimeout(this.pongTimer); this.pongTimer = null; }
-      switch (msg.t) {
-        case 'welcome':
-          setStatus('syncing');
-          break;
-        case 'changes':
-          applyRemote(msg.changes);
-          break;
-        case 'synced':
-          this.ready = true;
-          this.attempt = 0;
-          this.flush();
-          break;
-        case 'ack': {
-          const sent = this.inflight;
-          if (sent && sent.batch === msg.batch) this.finishBatch(sent.ops);
-          applyRemote(msg.changes ?? []);
-          this.flush();
-          break;
-        }
-        case 'error': {
-          const sent = this.inflight;
-          if (msg.code === 'unauthorized') {
-            this.stop();
-            this.onUnauthorized();
-          } else if (sent && msg.batch === sent.batch) {
-            // Lote recusado por validação: descarta para não travar a fila para sempre.
-            console.warn('Lote recusado pelo servidor', msg.message);
-            this.finishBatch(sent.ops);
-            this.flush();
-          }
-          break;
-        }
-      }
-    };
-
-    ws.onclose = () => {
-      if (this.ws !== ws) return;
-      this.ws = null;
-      this.ready = false;
-      this.inflight = null; // será reenviado após reconectar (o servidor é idempotente por LWW)
-      this.clearTimers();
+  private async run() {
+    if (this.running) { this.again = true; return; }
+    this.running = true;
+    if (pendingOps().length) setStatus('syncing');
+    else if (status === 'offline') setStatus('connecting');
+    try {
+      if (!(await this.hasSession())) return this.unauthorized();
+      do {
+        this.again = false;
+        await this.pull();
+        await this.push();
+      } while (this.again && !this.stopped);
+      if (this.stopped) return;
+      this.failures = 0;
+      setStatus('online');
+      if (!this.synced) { this.synced = true; this.onFirstSync(); }
+    } catch (e) {
       if (this.stopped) return;
       setStatus('offline');
-      const delay = Math.min(30_000, 1000 * 2 ** this.attempt++) * (0.7 + Math.random() * 0.6);
-      this.reconnectTimer = setTimeout(() => this.connect(), delay);
-    };
-
-    ws.onerror = () => { /* onclose cuida da reconexão */ };
-  }
-
-  private queueFlush() {
-    if (this.flushQueued) return;
-    this.flushQueued = true;
-    setTimeout(() => { this.flushQueued = false; this.flush(); }, 30);
-  }
-
-  private flush() {
-    if (!this.ready || this.inflight || !this.ws) {
-      if (this.ready && !this.inflight) setStatus('online');
-      return;
+      const delay = Math.min(30_000, 1000 * 2 ** this.failures++) * (0.7 + Math.random() * 0.6);
+      this.queue(delay);
+    } finally {
+      this.running = false;
+      if (this.again && !this.stopped) this.queue(0);
     }
-    const ops = pendingOps().slice(0, BATCH);
-    if (ops.length === 0) return setStatus('online');
-    setStatus('syncing');
-    this.inflight = { batch: Math.random().toString(36).slice(2), ops };
-    this.send({ t: 'push', batch: this.inflight.batch, ops });
-    this.ackTimer = setTimeout(() => this.ws?.close(), ACK_TIMEOUT_MS);
   }
 
-  private finishBatch(ops: Op[]) {
-    ackOps(ops);
-    this.inflight = null;
-    if (this.ackTimer) clearTimeout(this.ackTimer);
-    this.ackTimer = null;
+  // Sem rede, getSession devolve erro "retryable": é só offline, a sessão continua guardada.
+  private async hasSession() {
+    const { data, error } = await this.sb.auth.getSession();
+    if (data.session) return true;
+    if (error && isAuthRetryableFetchError(error)) throw error;
+    return false;
   }
 
-  private sendPing() {
-    if (this.ws?.readyState !== WebSocket.OPEN || this.pongTimer) return;
-    this.send({ t: 'ping' });
-    this.pongTimer = setTimeout(() => this.ws?.close(), PONG_TIMEOUT_MS);
-  }
-
-  private send(msg: unknown) {
-    if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(msg));
-  }
-
-  private clearTimers() {
-    for (const t of [this.pingTimer, this.pongTimer, this.ackTimer, this.reconnectTimer]) {
-      if (t) { clearTimeout(t as any); clearInterval(t as any); }
+  private async pull() {
+    for (;;) {
+      const { data, error } = await this.sb
+        .from('records')
+        .select('col,id,data,updated_at,device_id,deleted,seq')
+        .gt('seq', getState().lastSeq)
+        .order('seq')
+        .limit(PAGE);
+      if (error) throw error;
+      if (this.stopped) return;
+      applyRemote((data as Row[]).map(toChange));
+      if (data.length < PAGE) return;
     }
-    this.pingTimer = this.pongTimer = this.ackTimer = this.reconnectTimer = null;
+  }
+
+  private async push() {
+    for (;;) {
+      const ops = pendingOps().slice(0, BATCH);
+      if (ops.length === 0 || this.stopped) return;
+      setStatus('syncing');
+      const { data, error } = await this.sb.rpc('push_ops', { p_device: getState().deviceId, p_ops: ops });
+      if (this.stopped) return;
+      if (error?.code === '22023') {
+        // Lote recusado por validação: descarta para não travar a fila para sempre.
+        console.warn('Lote recusado pelo banco', error.message);
+        ackOps(ops);
+        continue;
+      }
+      if (error) throw error;
+      ackOps(ops);
+      // Aplica a versão vencedora sem o seq: o lastSeq só avança pela leitura,
+      // senão poderíamos pular mudanças de outro aparelho que ainda não lemos.
+      applyRemote((data as Change[]).map(({ seq, ...c }) => c));
+    }
   }
 }
