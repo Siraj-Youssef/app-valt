@@ -10,12 +10,7 @@
     "backgroundColor": "#0A0A0A",
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "app.rumo.habitos",
-      "infoPlist": {
-        "NSAppTransportSecurity": {
-          "NSAllowsLocalNetworking": true
-        }
-      }
+      "bundleIdentifier": "app.rumo.habitos"
     },
     "android": {
       "package": "app.rumo.habitos",
@@ -31,14 +26,6 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      [
-        "expo-build-properties",
-        {
-          "android": {
-            "usesCleartextTraffic": true
-          }
-        }
-      ],
       "expo-font"
     ],
     "extra": {

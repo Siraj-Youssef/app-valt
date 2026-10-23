@@ -1,82 +1,19 @@
-# Gera os executáveis do Rumo de graça nos servidores do GitHub (repositório público = minutos ilimitados).
-#   Windows: instalador .exe e versão portátil .exe · macOS: .dmg · Linux: .AppImage · Android: .apk
-# Como usar: Actions → "Gerar executáveis" → Run workflow (os arquivos ficam em "Artifacts" da execução)
-# ou crie uma tag vX.Y.Z (ex.: git tag v1.0.0 && git push origin v1.0.0) para publicar tudo numa Release.
-# O banco embutido vem das variáveis do repositório SUPABASE_URL e SUPABASE_KEY
-# (Settings → Secrets and variables → Actions → Variables). Sem elas, o app pede o banco na tela de entrada.
-name: Gerar executáveis
+# Gera o APK do Rumo (Android) de graça nos servidores do GitHub.
+# Roda sozinho a cada push que mexe no app; o .apk fica em "Artifacts", no fim da página da execução
+# (Actions → Gerar APK → a execução mais recente). Uma tag vX.Y.Z também publica o .apk numa Release.
+name: Gerar APK
 
 on:
   workflow_dispatch:
   push:
+    branches: ['**']
     tags: ['v*']
+    paths: ['app/**', '.github/workflows/release.yml']
 
 permissions:
   contents: write
 
-env:
-  EXPO_PUBLIC_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
-  EXPO_PUBLIC_SUPABASE_KEY: ${{ vars.SUPABASE_KEY }}
-
 jobs:
-  web:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: app/package-lock.json
-      - run: npm ci
-        working-directory: app
-      - run: npx tsc --noEmit
-        working-directory: app
-      - run: npx expo export -p web
-        working-directory: app
-      - uses: actions/upload-artifact@v4
-        with:
-          name: web
-          path: app/dist
-
-  desktop:
-    needs: web
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          name: web
-          path: app/dist
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: desktop/package-lock.json
-      - run: npm ci
-        working-directory: desktop
-      - name: Versão a partir da tag
-        if: startsWith(github.ref, 'refs/tags/v')
-        shell: bash
-        working-directory: desktop
-        run: npm version "${GITHUB_REF_NAME#v}" --no-git-tag-version --allow-same-version
-      - run: npx electron-builder --publish never
-        working-directory: desktop
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false' # sem certificado pago: executável não assinado
-      - uses: actions/upload-artifact@v4
-        with:
-          name: desktop-${{ runner.os }}
-          if-no-files-found: error
-          path: |
-            desktop/dist/*.exe
-            desktop/dist/*.dmg
-            desktop/dist/*.AppImage
-
   android:
     runs-on: ubuntu-latest
     steps:
@@ -93,39 +30,27 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - run: npm ci
         working-directory: app
+      - run: npx tsc --noEmit
+        working-directory: app
       - run: npx expo prebuild --platform android --no-install
         working-directory: app
-      # O modelo do Expo assina o APK de release com a chave de debug que vem no próprio modelo:
-      # serve para instalar direto no celular (não para a Play Store).
+      # O modelo do Expo assina o APK de release com a chave de debug que vem no próprio modelo
+      # (a mesma em todo build): instala e atualiza direto no celular, mas não serve para a Play Store.
       - run: ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a,armeabi-v7a
         working-directory: app/android
-      - run: mv app/android/app/build/outputs/apk/release/app-release.apk Rumo-android.apk
+      - run: mv app/android/app/build/outputs/apk/release/app-release.apk Rumo.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: android
+          name: Rumo-android
           if-no-files-found: error
-          path: Rumo-android.apk
-
-  release:
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: [desktop, android]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: '{desktop-*,android}'
-          path: out
-          merge-multiple: true
+          path: Rumo.apk
       - name: Publicar Release
+        if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          ls -la out
-          # Tags com hífen (ex.: v1.1.0-beta.1) saem como pré-lançamento.
-          pre=""; [[ "$GITHUB_REF_NAME" == *-* ]] && pre="--prerelease"
-          # Release criada pela tela do GitHub: só anexa os arquivos nela.
-          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" out/* --clobber --repo "$GITHUB_REPOSITORY"
-            exit 0
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" Rumo.apk --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" Rumo.apk --title "Rumo $GITHUB_REF_NAME" --notes "Baixe o Rumo.apk no celular Android e permita instalar de fontes desconhecidas."
           fi
-          gh release create "$GITHUB_REF_NAME" out/* $pre --repo "$GITHUB_REPOSITORY" --title "Rumo $GITHUB_REF_NAME" --notes "Windows: baixe o instalador (.exe) ou a versão portátil. Android: baixe o .apk no celular e permita instalar de fontes desconhecidas. macOS: .dmg (não assinado; veja o README). Linux: .AppImage."

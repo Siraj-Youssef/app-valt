@@ -1,14 +1,11 @@
-// Estado de interface compartilhado entre as telas: abrir sheets, sessão e sair.
+// Estado de interface compartilhado entre as telas: abrir os formulários (sheets).
 import { createContext, useContext } from 'react';
-import type { Goal, Task, User } from './data/types';
+import type { Goal, Task } from './data/types';
 
 export type ShellApi = {
-  user: User;
-  serverUrl: string;
   openTask: (opts: { mode: 'weekly' | 'once'; date?: string; editing?: (Task & { id: string }) | null }) => void;
   openGoal: (editing?: (Goal & { id: string }) | null) => void;
   openLog: (goalId?: string | null) => void;
-  logout: () => void;
 };
 
 export const ShellContext = createContext<ShellApi | null>(null);

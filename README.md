@@ -1,12 +1,12 @@
 # Rumo: um passo de cada vez
 
-App para **computador (Windows, macOS, Linux) e celular (Android; iPhone pelo navegador)** para planejar hábitos, somar pontos, bater metas diárias e acompanhar a "rota" do mês, com **sincronização em tempo real** entre os aparelhos e funcionamento offline. Tudo em planos **gratuitos**: banco no Supabase e executáveis gerados pelo GitHub.
+App de celular (**Android**) para planejar hábitos, somar pontos, bater metas diárias e acompanhar a "rota" do mês. **Sem conta, sem servidor e sem internet:** tudo fica salvo no próprio celular. O APK é gerado de graça pelo GitHub.
 
 Nasceu da análise de um app pessoal mostrado num vídeo do Instagram (`@adrian_valt`, 22/10/2026). Do vídeo veio só a **ideia geral**, que é comum a vários apps de hábitos (tarefas que valem pontos, metas por dia, sequência e calendário). Nome, marca, cores, tipografia, textos, layout, navegação e fluxos foram criados do zero.
 
 | Entrada | Hoje | Novo passo | Mapa | Metas | Você |
 |---|---|---|---|---|---|
-| ![Entrada](docs/telas/0-login.png) | ![Hoje](docs/telas/1-hoje.png) | ![Novo passo](docs/telas/3-novo-passo.png) | ![Mapa](docs/telas/4-mapa.png) | ![Metas](docs/telas/5-metas.png) | ![Você](docs/telas/6-voce.png) |
+| ![Entrada](docs/telas/0-entrada.png) | ![Hoje](docs/telas/1-hoje.png) | ![Novo passo](docs/telas/3-novo-passo.png) | ![Mapa](docs/telas/4-mapa.png) | ![Metas](docs/telas/5-metas.png) | ![Você](docs/telas/6-voce.png) |
 
 ---
 
@@ -38,8 +38,7 @@ Nasceu da análise de um app pessoal mostrado num vídeo do Instagram (`@adrian_
 - **Novo passo:** hábito recorrente (dias da semana, atalhos "Todo dia / Dias úteis / Fins de semana") ou passo de um dia só; ícone, pontos, horário e minutos opcionais; "Salvar e adicionar outro"; editar e excluir tocando no item.
 - **Mapa:** mapa de calor do mês com marcos, resumo (pontos, marcos, passos), detalhe do dia, últimas 8 semanas com linha de meta, ranking de constância em 30 dias.
 - **Metas:** destinos da semana, do mês e do ano com unidade livre (livros, km, R$…), +1 rápido e registro de valores maiores.
-- **Você:** etapa e quanto falta, **Rota do mês** com previsão, pontos por dia da semana (a meta da semana e do mês é a soma), nome editável, sair.
-- **Sincronização:** indicador no topo ("em dia", "sincronizando", "N pendentes", "offline"). O que é marcado no computador aparece no celular em menos de um segundo, e vice-versa.
+- **Você:** etapa e quanto falta, **Rota do mês** com previsão, pontos por dia da semana (a meta da semana e do mês é a soma), nome editável.
 
 **Regras** (`app/src/lib/model.ts`):
 - **Marco:** dia em que os pontos alcançam a meta do dia.
@@ -49,147 +48,67 @@ Nasceu da análise de um app pessoal mostrado num vídeo do Instagram (`@adrian_
 
 ---
 
-## 3. Como fica de graça
+## 3. Instalar no celular (Android)
 
-| Peça | Serviço gratuito | O que faz |
-|---|---|---|
-| Banco + contas + tempo real | **Supabase** (plano Free) | Guarda os dados de cada conta (Postgres), faz login por e-mail e senha e avisa os aparelhos na hora quando algo muda |
-| Executáveis | **GitHub Actions** (grátis e ilimitado em repositório público) | Gera o instalador `.exe` do Windows, o `.dmg` do macOS, o `.AppImage` do Linux e o `.apk` do Android, e publica tudo numa Release |
-| iPhone | **GitHub Pages** | Versão web instalável: Safari → Compartilhar → "Adicionar à Tela de Início". (App nativo de iPhone exige a conta Apple de US$ 99/ano) |
+1. No GitHub, abra **Actions → Gerar APK** e clique na execução mais recente com o ✓ verde.
+2. No fim da página, em **Artifacts**, baixe **Rumo-android** (vem um `.zip` com o `Rumo.apk` dentro).
+3. Abra o `Rumo.apk` no celular e permita **instalar apps desconhecidos** para o navegador ou o gerenciador de arquivos.
 
-Nada disso pede cartão de crédito.
+Para uma versão fixa e fácil de achar, crie uma tag `v1.0.0` (em **Releases → Draft a new release**): o mesmo workflow anexa o `Rumo.apk` à Release.
 
----
+**Atualizar:** instale o APK novo por cima. Os dados continuam lá, porque todo build é assinado com a mesma chave.
 
-## 4. Passo a passo (uma vez só, uns 15 minutos)
-
-### 4.1 Criar o banco no Supabase
-1. Crie uma conta em **supabase.com** e clique em **New project** (região: *South America (São Paulo)*). Guarde a senha do banco, mas o app não precisa dela.
-2. No projeto, abra **SQL Editor → New query**, cole todo o conteúdo de [`supabase/schema.sql`](supabase/schema.sql) e clique **Run**. Deve aparecer "Success".
-3. **Authentication → Sign In / Providers → Email:** desligue **Confirm email** (assim a conta funciona na hora, sem link por e-mail). Se preferir deixar ligado, o app avisa para confirmar pelo e-mail antes de entrar.
-4. **Project Settings → API Keys** (ou **Data API**): copie a **Project URL** (`https://xxxx.supabase.co`) e a chave **publishable** (ou **anon public**). Essa chave é feita para ficar dentro do app; quem protege os dados são as regras do banco (cada conta só lê e grava o que é seu). **Nunca** use a chave `service_role`/`secret`.
-
-### 4.2 Contar ao GitHub qual é o banco
-No repositório: **Settings → Secrets and variables → Actions → aba Variables → New repository variable**:
-
-| Nome | Valor |
-|---|---|
-| `SUPABASE_URL` | a Project URL |
-| `SUPABASE_KEY` | a chave publishable/anon |
-
-Assim os executáveis já saem apontando para o seu banco. (Sem isso eles funcionam também, mas pedem a URL e a chave na tela de entrada, no botão **Banco**.)
-
-### 4.3 Gerar os executáveis
-- **Publicar uma versão:** em **Code → Releases → Draft a new release**, crie a tag `v1.0.0` (ou rode `git tag v1.0.0 && git push origin v1.0.0`). O workflow **Gerar executáveis** roda sozinho (uns 15–20 min) e cria a Release com os arquivos. Se a Release foi criada pela tela, os arquivos são anexados a ela.
-- **Só testar:** **Actions → Gerar executáveis → Run workflow**. Os arquivos ficam em **Artifacts**, no fim da página da execução.
-
-| Arquivo | Para |
-|---|---|
-| `Rumo-x.y.z-instalador-windows.exe` | Windows, instala com atalho no menu Iniciar |
-| `Rumo-x.y.z-portatil-windows.exe` | Windows, roda sem instalar (bom para pendrive) |
-| `Rumo-android.apk` | Android |
-| `Rumo-x.y.z-mac-arm64.dmg` | macOS (Apple Silicon) |
-| `Rumo-x.y.z-linux-x86_64.AppImage` | Linux |
-
-### 4.4 Instalar
-- **Windows:** o executável não tem certificado pago, então o SmartScreen avisa na primeira vez: **Mais informações → Executar assim mesmo**.
-- **Android:** abra o `.apk` no celular (pelo navegador ou mandando para si mesmo) e permita **instalar apps desconhecidos** para o navegador/gerenciador de arquivos. Atualizar é instalar o `.apk` novo por cima; os dados ficam.
-- **iPhone:** ative **Settings → Pages → Source: GitHub Actions** no repositório e rode **Actions → Publicar versão web** (também roda sozinho a cada tag `v*`). Abra `https://<seu-usuario>.github.io/app-valt/` no **Safari → Compartilhar → Adicionar à Tela de Início**. Precisa de internet para abrir; os dados ficam salvos no aparelho.
-- **macOS:** como não é assinado pela Apple, depois de arrastar para Aplicativos rode uma vez no Terminal `xattr -cr /Applications/Rumo.app`.
-
-Entre com **o mesmo e-mail e senha** no computador e no celular: é isso que liga os dois.
-
-### 4.5 Fechar o cadastro (recomendado)
-O repositório é público e a chave do app também; qualquer pessoa com o app poderia criar uma conta no **seu** banco (sem ver os seus dados). Depois de criar a sua conta (e a de quem mais for usar), desligue em **Authentication → Sign In / Providers → Allow new users to sign up**. O app mostra "Novos cadastros estão desligados" para quem tentar.
+O APK é gerado a cada push que mexe em `app/`, pelo workflow [`.github/workflows/release.yml`](.github/workflows/release.yml). Isso não custa nada, porque o repositório é público.
 
 ---
 
-## 5. Arquitetura
+## 4. Onde ficam os dados
 
-```
- ┌──── Computador (Electron) ────┐   ┌──── Celular (Android / iPhone web) ────┐
- │ mesmo código React Native     │   │ Telas (React Native)                   │
- │ (versão web embutida no .exe) │   │ store.ts  banco local + outbox         │
- │ store.ts → localStorage       │   │ sync.ts   pull por seq, push em lotes  │
- └──────────────┬────────────────┘   └───────────────────┬────────────────────┘
-                │ HTTPS (REST) + WebSocket (Realtime)    │
-                ▼                                        ▼
-        ┌────────────────────────── Supabase (grátis) ─────────────────────────┐
-        │ Auth: e-mail e senha                                                 │
-        │ Postgres: tabela records (RLS: cada usuário só vê o que é seu)       │
-        │ push_ops(): "last writer wins" por registro + seq crescente          │
-        │ Realtime: avisa os outros aparelhos quando records muda              │
-        └──────────────────────────────────────────────────────────────────────┘
-```
-
-**Protocolo** (`app/src/data/sync.ts` e `supabase/schema.sql`):
-1. Tudo é gravado primeiro no aparelho (a interface nunca espera a rede). Cada edição entra na **outbox**.
-2. O app lê do banco tudo com `seq > lastSeq` (de 1000 em 1000) e envia a outbox em lotes de 200 pela função `push_ops`. Só sai da outbox o que foi confirmado e não foi editado de novo nesse meio-tempo.
-3. **Conflito:** *last writer wins* por registro (timestamp, com `deviceId` como desempate, comparado byte a byte igual no app e no banco). Ao editar, o app usa `max(agora, versão atual + 1)`, então quem edita depois de ver a versão de outro aparelho sempre vence, mesmo com o relógio atrasado.
-4. **Sem buracos:** `push_ops` serializa os lotes de cada usuário (advisory lock), então quem lê `seq > X` nunca pula uma mudança em andamento. A resposta do envio não avança o `lastSeq`; só a leitura avança.
-5. **Tempo real:** o Supabase Realtime avisa quando uma linha do usuário muda e o app faz a leitura na hora. Por garantia, também lê a cada 60 s e ao voltar para o app.
-6. **Rede ruim:** requisições com limite de 15 s; falhou, tenta de novo com backoff exponencial + jitter (1 s → 30 s); ao voltar do background sincroniza na hora e grava o estado local.
-
-**Coleções sincronizadas:** `tasks`, `completions` (id `tarefa@data`), `settings` (`goals`, `profile`), `goals`, `goalLogs`.
+- Tudo fica no armazenamento do app (AsyncStorage) dentro do celular. Nada sai do aparelho.
+- **Desinstalar o app ou limpar os dados dele apaga tudo.** Se o backup do Google estiver ligado no celular (Configurações → Google → Backup), o Android costuma salvar os dados dos apps e restaurá-los ao reinstalar, mas isso depende do aparelho.
+- Trocar de celular não leva os dados automaticamente. Exportar e importar um arquivo de backup seria uma melhoria simples, se fizer falta.
 
 ---
 
-## 6. Código-fonte
+## 5. Código-fonte
 
 ```
-├── app/                          Expo SDK 58 + React Native (Android, iOS e web)
-│   ├── App.tsx                   fontes, sessão, abas, botão "+" contextual, sheets
-│   ├── app.json / app.config.js  config nativa; app.config.js só ajusta a subpasta da versão web
-│   ├── public/                   index.html e manifest da versão web (instalável)
+├── app/                          Expo SDK 58 + React Native + TypeScript
+│   ├── App.tsx                   fontes, primeira abertura (nome), abas, botão "+" contextual, sheets
+│   ├── app.json / eas.json       config nativa e perfis de build do EAS (opcional)
+│   ├── assets/                   ícone, ícone adaptativo Android, splash
 │   └── src/
-│       ├── data/   store.ts (banco local + outbox) · sync.ts (Supabase) · session.ts (contas) · types.ts
+│       ├── theme.ts              paleta e fontes da marca
+│       ├── data/   store.ts (banco local) · types.ts
 │       ├── lib/    model.ts (pontos, marcos, etapa, rota, Bússola) · dates.ts · confirm.ts
-│       ├── components/ · sheets/ · screens/
-├── desktop/                      Electron: main.js abre app/dist pelo protocolo rumo://app
-├── supabase/schema.sql           tabela, regras de acesso (RLS), push_ops e Realtime
-├── supabase/test/                testes do schema num Postgres local (run.sh)
-├── .github/workflows/            release.yml (exe/dmg/AppImage/apk) · pages.yml (web) · ci.yml (verificações)
+│       ├── components/ ui.tsx · widgets.tsx (TrailBar, WeekDots, DayNav, TaskRow)
+│       ├── sheets/ TaskSheet (Novo passo) · GoalSheets
+│       └── screens/ Welcome · Today · Map · Goals · You
+├── .github/workflows/release.yml gera o APK
 └── docs/telas/                   screenshots
 ```
 
-O servidor Node próprio da versão anterior (`server/`, `deploy/`) foi substituído pelo Supabase, que não precisa de computador ligado nem de domínio. Ele continua no histórico do git (commit `1fc33ac`).
+As versões anteriores (servidor próprio em Node e depois Supabase + versão para computador) continuam no histórico do git.
 
 ---
 
-## 7. Desenvolvimento
-
-Pré-requisito: Node 22 ou mais novo. Crie `app/.env.local` (não vai para o git) com:
-```
-EXPO_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
-EXPO_PUBLIC_SUPABASE_KEY=sb_publishable_...
-```
+## 6. Desenvolvimento
 
 ```bash
-# celular com Expo Go (mesma rede Wi-Fi) ou navegador
-cd app && npm install && npx expo start
-
-# computador (Electron) usando a versão web
-cd desktop && npm install && npm run web && npm start
-
-# executável local do seu sistema (Windows gera .exe, Mac .dmg, Linux .AppImage) em desktop/dist
-cd desktop && npm run dist
-
-# testes do banco (precisa de Postgres instalado: initdb, pg_ctl, psql)
-bash supabase/test/run.sh
+cd app
+npm install
+npx expo start       # abre no celular pelo app Expo Go (mesma rede Wi-Fi) ou no navegador (tecla w)
+npx tsc --noEmit     # checagem de tipos
 ```
 
-**EAS (opcional):** o `app/eas.json` continua valendo para gerar o APK ou o iOS pela nuvem do Expo. Para embutir o banco nesses builds, cadastre as variáveis com `npx eas-cli env:create` (nomes `EXPO_PUBLIC_SUPABASE_URL` e `EXPO_PUBLIC_SUPABASE_KEY`).
+**EAS (opcional):** `app/eas.json` também gera o APK pela nuvem do Expo (`npx eas-cli build -p android --profile preview`) e, com a conta Apple de US$ 99/ano, a versão de iPhone.
 
 ---
 
-## 8. Limitações e pontos a validar
+## 7. Limitações
 
-- **Supabase Free:** 500 MB de banco (sobra para anos de uso pessoal). Um projeto **sem nenhum acesso por 7 dias** é pausado; os dados ficam guardados e basta clicar **Restore** no painel. Usar o app no dia a dia já conta como acesso.
-- **Assinatura:** `.exe` e `.dmg` sem certificado pago (avisos na primeira abertura). O APK é assinado com a chave de debug do modelo do Expo: instala direto, mas não serve para a Play Store.
-- **iPhone:** só pela versão web (sem notificações e precisa de internet para abrir). App nativo exige Apple Developer (US$ 99/ano) e `eas build -p ios`.
-- **Sem atualização automática:** para atualizar, baixe e instale a versão nova da Release. Os dados não se perdem: ficam no aparelho e no banco.
+- **Só Android** como app instalável. iPhone exige a conta Apple paga.
+- **APK assinado com a chave de debug do modelo do Expo:** instala e atualiza direto no celular, mas não serve para a Play Store.
+- **Sem lembretes:** notificações no horário do passo seriam o próximo passo (`expo-notifications`).
 - **Nome:** verificar disponibilidade de "Rumo" no INPI e nas lojas (ver nota na seção 1). Os ids `app.rumo.habitos` são provisórios.
-- **Sem push:** lembretes no horário do passo seriam o próximo passo (`expo-notifications`).
-- **Conflito por registro inteiro**, não por campo. Exclusões ficam como tombstones; recuperação de senha e exclusão de conta são feitas pelo painel do Supabase (Authentication → Users).
-- **Verificado aqui:** testes do `schema.sql` (8 cenários: LWW, empate, tombstone, isolamento entre contas, validação, permissões, Realtime) num Postgres 16; `tsc` sem erros; versão web com dois "aparelhos" contra um Supabase simulado sobre o mesmo banco (tempo real em ~0,3 s, fila offline sobrevivendo a recarregar a página e entregue ao voltar a rede); app Electron empacotado (`.AppImage`) abrindo, criando conta, fechando e reabrindo logado com os dados; `expo prebuild` do Android.
-- **Não verificado aqui:** o Supabase de verdade (o ambiente de desenvolvimento não tinha acesso a ele), celular físico e os builds de Windows/macOS/Android, que rodam no GitHub Actions.
+- As telas 1 a 6 acima são da versão anterior e ainda mostram o indicador de sincronização no topo, que foi retirado.

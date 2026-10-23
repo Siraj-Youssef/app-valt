@@ -5,20 +5,18 @@ import { createBottomTabNavigator, type BottomTabBarProps } from '@react-navigat
 import { DarkTheme, NavigationContainer } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, AppState, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { T } from './src/components/ui';
-import { clearSession, loadSession, logoutRemote, saveSession, supabaseFor, type Session } from './src/data/session';
-import { closeDb, getState, loadDb, put, useDb } from './src/data/store';
-import { SyncClient } from './src/data/sync';
+import { loadDb, put, saveNow, useDb } from './src/data/store';
 import type { Goal, ProfileSettings, Task } from './src/data/types';
 import { todayKey } from './src/lib/dates';
 import { buildModel } from './src/lib/model';
 import { GoalsScreen } from './src/screens/GoalsScreen';
-import { LoginScreen } from './src/screens/LoginScreen';
 import { MapScreen } from './src/screens/MapScreen';
 import { TodayScreen } from './src/screens/TodayScreen';
+import { WelcomeScreen } from './src/screens/WelcomeScreen';
 import { YouScreen } from './src/screens/YouScreen';
 import { GoalSheet, LogSheet } from './src/sheets/GoalSheets';
 import { TaskSheet, type TaskSheetProps } from './src/sheets/TaskSheet';
@@ -38,35 +36,13 @@ const TABS: { name: string; icon: IconName; iconOn: IconName; component: () => R
 export default function App() {
   const [fontsLoaded] = useFonts({ SpaceGrotesk_600SemiBold, SpaceGrotesk_700Bold, Inter_400Regular, Inter_500Medium, Inter_600SemiBold });
   const [booting, setBooting] = useState(true);
-  const [session, setSession] = useState<Session | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-  const client = useRef<SyncClient | null>(null);
-
-  async function start(s: Session) {
-    await loadDb(s.user.id);
-    client.current?.stop();
-    client.current = new SyncClient(
-      supabaseFor(s.backend),
-      s.user.id,
-      () => endSession('Sua sessão expirou. Entre de novo.'),
-      // Só cria o perfil se o banco ainda não tiver um (num aparelho novo, ele já vem com a data de início).
-      () => { if (!getState().cols.settings.profile) put<ProfileSettings>('settings', 'profile', { name: s.user.name, startDate: todayKey() }); },
-    );
-    setSession(s);
-  }
-
-  async function endSession(message: string | null) {
-    client.current?.stop();
-    client.current = null;
-    await closeDb(true);
-    await clearSession();
-    setNotice(message);
-    setSession(null);
-  }
+  const hasProfile = !!useDb().cols.settings.profile;
 
   useEffect(() => {
-    loadSession().then(async (s) => { if (s) await start(s); }).finally(() => setBooting(false));
-    return () => client.current?.stop();
+    loadDb().finally(() => setBooting(false));
+    // Ao sair do app, grava na hora (sem esperar o agrupamento de 250 ms).
+    const sub = AppState.addEventListener('change', (st) => { if (st !== 'active') saveNow(); });
+    return () => sub.remove();
   }, []);
 
   return (
@@ -74,36 +50,27 @@ export default function App() {
       <StatusBar style="light" />
       {booting || !fontsLoaded ? (
         <View style={{ flex: 1, backgroundColor: colors.bg, justifyContent: 'center' }}><ActivityIndicator color={colors.primary} /></View>
-      ) : session ? (
-        <Main session={session} onLogout={() => { endSession(null); logoutRemote(session); }} />
+      ) : hasProfile ? (
+        <Main />
       ) : (
-        <LoginScreen
-          notice={notice}
-          onDone={async (s) => {
-            await saveSession(s);
-            await start(s);
-          }}
-        />
+        <WelcomeScreen onDone={(name) => put<ProfileSettings>('settings', 'profile', { name, startDate: todayKey() })} />
       )}
     </SafeAreaProvider>
   );
 }
 
-function Main({ session, onLogout }: { session: Session; onLogout: () => void }) {
+function Main() {
   const m = buildModel(useDb());
   const [taskSheet, setTaskSheet] = useState<Omit<TaskSheetProps, 'onClose'>>({ visible: false, mode: 'weekly' });
   const [goalSheet, setGoalSheet] = useState<{ visible: boolean; editing: (Goal & { id: string }) | null }>({ visible: false, editing: null });
   const [logSheet, setLogSheet] = useState<{ visible: boolean; goalId: string | null }>({ visible: false, goalId: null });
 
   const api = useMemo<ShellApi>(() => ({
-    user: session.user,
-    serverUrl: session.backend.url,
     openTask: ({ mode, date, editing }: { mode: 'weekly' | 'once'; date?: string; editing?: (Task & { id: string }) | null }) =>
       setTaskSheet({ visible: true, mode, date, editing }),
     openGoal: (editing) => setGoalSheet({ visible: true, editing: editing ?? null }),
     openLog: (goalId) => setLogSheet({ visible: true, goalId: goalId ?? null }),
-    logout: onLogout,
-  }), [session, onLogout]);
+  }), []);
 
   const theme = { ...DarkTheme, colors: { ...DarkTheme.colors, background: colors.bg, card: colors.surface, primary: colors.primary, text: colors.ink, border: colors.line } };
 

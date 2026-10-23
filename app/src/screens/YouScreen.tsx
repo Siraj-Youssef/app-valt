@@ -4,10 +4,8 @@ import { Pressable, TextInput, View } from 'react-native';
 import { Bar, Card, Nudge, Section, T, s } from '../components/ui';
 import { put, useDb } from '../data/store';
 import type { GoalsSettings, ProfileSettings } from '../data/types';
-import { confirm } from '../lib/confirm';
 import { MONTHS, WEEKDAY_LONG, todayKey } from '../lib/dates';
 import { buildModel, level, monthStats, routeStatus, streaks, weekGoal } from '../lib/model';
-import { useShell } from '../shell';
 import { colors } from '../theme';
 import { Screen } from './Screen';
 
@@ -20,10 +18,9 @@ const TONE = {
 
 export function YouScreen() {
   const m = buildModel(useDb());
-  const { user, serverUrl, logout } = useShell();
   const today = todayKey();
   const now = new Date();
-  const name = m.profile?.name || user.name;
+  const name = m.profile?.name ?? '';
   const [editing, setEditing] = useState<string | null>(null);
   const lv = level(m, today);
   const st = streaks(m, today);
@@ -44,8 +41,7 @@ export function YouScreen() {
   return (
     <Screen kicker="Você" title={name}>
       <View style={[s.row, { marginTop: -10, marginBottom: 6 }]}>
-        <T dim size={13}>{user.email}</T>
-        <Pressable onPress={() => setEditing(name)} style={[s.row, { marginLeft: 10 }]}>
+        <Pressable onPress={() => setEditing(name)} style={s.row}>
           <Ionicons name="create-outline" size={14} color={colors.primary} />
           <T v="medium" size={13} style={{ color: colors.primary, marginLeft: 3 }}>editar nome</T>
         </Pressable>
@@ -104,14 +100,12 @@ export function YouScreen() {
         <T faint size={12} style={{ marginTop: 8 }}>A meta da semana e do mês é a soma dos dias. Dia com 0 é dia livre e não quebra a sequência.</T>
       </Section>
 
-      <Section title="Conta">
+      <Section title="Seus dados">
         <Card>
-          <T size={12} dim>Banco de sincronização</T>
-          <T size={13} style={{ marginTop: 2 }}>{serverUrl}</T>
-          <Pressable onPress={() => confirm('Sair', 'Sair desta conta neste aparelho? Alterações ainda não enviadas serão perdidas.', 'Sair', logout)} style={[s.row, { marginTop: 14 }]}>
-            <Ionicons name="log-out-outline" size={18} color={colors.danger} />
-            <T v="bold" style={{ color: colors.danger, marginLeft: 6 }}>Sair da conta</T>
-          </Pressable>
+          <View style={s.row}>
+            <Ionicons name="phone-portrait-outline" size={18} color={colors.inkDim} />
+            <T size={13} dim style={{ marginLeft: 8, flex: 1 }}>Tudo fica salvo só neste celular, sem conta e sem internet. Desinstalar o app apaga os dados.</T>
+          </View>
         </Card>
       </Section>
     </Screen>

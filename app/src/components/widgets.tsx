@@ -1,31 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, View } from 'react-native';
-import { useDb } from '../data/store';
-import { useSyncStatus } from '../data/sync';
 import type { Task } from '../data/types';
 import { WEEKDAY_LETTER, addDays, fromKey, todayKey, MONTHS, WEEKDAY_LONG, weekdayOf } from '../lib/dates';
 import { colors, radius } from '../theme';
 import { T } from './ui';
-
-// Ponto colorido + texto curto: deixa visível quando há alterações locais esperando o servidor.
-export function SyncDot() {
-  const status = useSyncStatus();
-  const pending = Object.keys(useDb().outbox).length;
-  // Monocromático quando está tudo bem; vermelho só quando há alteração esperando o servidor.
-  let color = colors.ink;
-  let label = 'em dia';
-  if (status === 'connecting' || status === 'syncing') { color = colors.inkDim; label = 'sincronizando'; }
-  else if (status === 'offline') {
-    color = pending ? colors.primary : colors.inkFaint;
-    label = pending ? `${pending} pendente${pending > 1 ? 's' : ''}` : 'offline';
-  }
-  return (
-    <View style={[st.row, st.sync]} accessibilityLabel={`Sincronização: ${label}`}>
-      <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: color, marginRight: 6 }} />
-      <T v="medium" size={12} dim>{label}</T>
-    </View>
-  );
-}
 
 // Barra da trilha do dia: um trecho por tarefa, proporcional aos pontos; preenche quando concluída.
 export function TrailBar({ parts }: { parts: { id: string; points: number; done: boolean }[] }) {
@@ -114,7 +92,6 @@ export function InlineStat({ icon, value, label, tint = colors.ink }: { icon: ke
 
 const st = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center' },
-  sync: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.pill, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line },
   trail: { height: 10, borderRadius: 5, flex: 1 },
   dot: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
   dayNav: { backgroundColor: colors.surface, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: colors.line },

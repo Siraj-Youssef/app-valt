@@ -1,4 +1,4 @@
-// Coleções sincronizadas com o servidor. Cada registro é um documento JSON com id próprio.
+// Coleções do banco local. Cada registro é um documento JSON com id próprio.
 export type ColName = 'tasks' | 'completions' | 'settings' | 'goals' | 'goalLogs';
 
 export type Task = {
@@ -13,7 +13,7 @@ export type Task = {
   startDate: string; // a tarefa não aparece em dias anteriores à criação
 };
 
-// id = `${taskId}@${date}`; desmarcar vira done=false (mais simples para o "last writer wins").
+// id = `${taskId}@${date}`; desmarcar vira done=false.
 export type Completion = { taskId: string; date: string; done: boolean; points: number };
 
 export type GoalsSettings = { daily: number[] }; // settings/goals: meta de pontos de seg..dom
@@ -34,12 +34,5 @@ export type Rec<T = unknown> = {
   id: string;
   data: T | null;
   updatedAt: number;
-  deviceId: string;
   deleted: boolean;
 };
-
-export type Change = Rec & { col: ColName; seq?: number };
-
-export type Op = { col: ColName; id: string; data: unknown; updatedAt: number; deleted: boolean };
-
-export type User = { id: string; email: string; name: string };

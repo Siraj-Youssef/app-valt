@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
-import { DayNav, InlineStat, SyncDot, TaskRow, TrailBar, WeekDots } from '../components/widgets';
+import { DayNav, InlineStat, TaskRow, TrailBar, WeekDots } from '../components/widgets';
 import { Card, Section, T, s } from '../components/ui';
 import { put, useDb } from '../data/store';
 import type { Completion } from '../data/types';
@@ -19,12 +19,12 @@ const PERIODS: DayPeriod[] = ['Manhã', 'Tarde', 'Noite', 'Qualquer hora'];
 
 export function TodayScreen() {
   const m = buildModel(useDb());
-  const { user, openTask } = useShell();
+  const { openTask } = useShell();
   const nav = useNavigation<any>();
   const today = todayKey();
   const [day, setDay] = useState(today);
 
-  const name = (m.profile?.name || user.name).split(' ')[0];
+  const name = (m.profile?.name ?? '').split(' ')[0];
   const now = new Date();
   const dayTasks = tasksFor(m, day);
   const dayPts = pointsOn(m, day);
@@ -44,8 +44,7 @@ export function TodayScreen() {
       <View style={[s.row, { justifyContent: 'space-between' }]}>
         <T v="displayBold" size={24} style={{ letterSpacing: -0.5 }}>rumo<T v="displayBold" size={24} style={{ color: colors.primary }}>.</T></T>
         <View style={s.row}>
-          <SyncDot />
-          <Pressable onPress={() => nav.navigate('Você')} accessibilityLabel="Abrir perfil" style={{ marginLeft: 10, width: 36, height: 36, borderRadius: 10, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
+          <Pressable onPress={() => nav.navigate('Você')} accessibilityLabel="Abrir perfil" style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
             <T v="bold" style={{ color: colors.onPrimary }}>{name.slice(0, 1).toUpperCase()}</T>
           </Pressable>
         </View>
